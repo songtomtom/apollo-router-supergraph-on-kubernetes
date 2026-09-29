@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apollo-router
+spec:
+  template:
+    spec:
+      # init container와 그 전용 볼륨을 지운다. base는 그대로라 revert 한 번으로 되돌아간다.
+      initContainers:
+      - name: schema-composer
+        $patch: delete
+      volumes:
+      - name: shared-data
+        $patch: delete
+      - name: subgraphs
+        $patch: delete
+      - name: tmp
+        $patch: delete
+      containers:
+      - name: router
+        # --supergraph 를 빼면 APOLLO_KEY/APOLLO_GRAPH_REF 로 Uplink에서 받는다
+        args: ["--config", "/etc/apollo/router.yaml"]
+        volumeMounts:
+        - name: shared-data
+          mountPath: /shared
+          $patch: delete
+        env:
+        - name: APOLLO_KEY
+          valueFrom: {secretKeyRef: {name: apollo-router-studio, key: APOLLO_KEY}}
+        - name: APOLLO_GRAPH_REF
+          valueFrom: {secretKeyRef: {name: apollo-router-studio, key: APOLLO_GRAPH_REF}}

@@ -1,0 +1,11 @@
+# CI 에서 로컬로 띄운 두 서브그래프를 compose 하기 위한 목록. 클러스터용 목록은 k8s/base/router/subgraphs-configmap.yaml.
+federation_version: =2.15.1
+subgraphs:
+  products:
+    routing_url: http://localhost:4001/
+    schema:
+      subgraph_url: http://localhost:4001/
+  reviews:
+    routing_url: http://localhost:4002/
+    schema:
+      subgraph_url: http://localhost:4002/

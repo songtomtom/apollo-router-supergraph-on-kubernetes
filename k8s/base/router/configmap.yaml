@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: apollo-router-config
+data:
+  router.yaml: |
+    supergraph:
+      listen: 0.0.0.0:4000
+      introspection: true
+    health_check:
+      enabled: true
+      listen: 0.0.0.0:8088
+      path: /health
+    include_subgraph_errors:
+      all: true
+    telemetry:
+      exporters:
+        metrics:
+          prometheus:
+            enabled: true
+            listen: 0.0.0.0:9090
+            path: /metrics

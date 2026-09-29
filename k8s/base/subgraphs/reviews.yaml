@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reviews
+  labels: {app: reviews}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: reviews}}
+  template:
+    metadata:
+      labels: {app: reviews}
+    spec:
+      containers:
+      - name: reviews
+        image: subgraph-reviews:dev
+        imagePullPolicy: IfNotPresent
+        ports: [{containerPort: 4001}]
+        # Apollo Server는 CSRF 방지로 헤더 없는 GET을 거부하므로 TCP 프로브를 쓴다
+        readinessProbe:
+          tcpSocket: {port: 4001}
+          periodSeconds: 3
+        resources:
+          requests: {cpu: 20m, memory: 64Mi}
+          limits: {memory: 128Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: reviews
+spec:
+  selector: {app: reviews}
+  ports: [{port: 80, targetPort: 4001}]

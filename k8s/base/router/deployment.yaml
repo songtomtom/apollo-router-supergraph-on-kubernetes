@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apollo-router
+  labels: {app: apollo-router}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: apollo-router}}
+  template:
+    metadata:
+      labels: {app: apollo-router}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      # 파드가 뜰 때마다 클러스터 안의 서브그래프를 introspect해서 슈퍼그래프를 합친다.
+      # 레지스트리 없이 "지금 떠 있는 서브그래프"가 곧 스키마의 진실이 된다.
+      initContainers:
+      - name: schema-composer
+        image: node:18
+        securityContext:
+          runAsNonRoot: false   # npm 전역 설치 때문에 root가 필요하다
+          runAsUser: 0
+        command:
+        - sh
+        - -c
+        - |
+          set -e
+          echo "Installing Rover CLI..."
+          export NPM_CONFIG_CACHE=/tmp/.npm NPM_CONFIG_PREFIX=/tmp/.npm-global
+          export PATH="/tmp/.npm-global/bin:$PATH"
+          npm install -g @apollo/rover
+
+          sed "s/\${POD_NAMESPACE}/${POD_NAMESPACE}/g" /etc/subgraphs/supergraph.yaml > /shared/supergraph.yaml
+
+          # 목록에서 name과 routing_url을 뽑아 순회한다
+          awk '/^  [a-z0-9-]+:$/ { name=$1; sub(/:$/, "", name) } /^    routing_url:/ { print name, $2 }' \
+            /shared/supergraph.yaml > /tmp/subgraphs.list
+
+          if [ -n "${APOLLO_KEY}" ]; then
+            echo "Publishing subgraphs to GraphOS..."
+            while read -r name url; do
+              rover subgraph introspect "${url}" < /dev/null | \
+                rover subgraph publish "${APOLLO_GRAPH_REF}" --name "${name}" --routing-url "${url}" \
+                  --schema - --convert || echo "Warning: Failed to publish ${name}"
+            done < /tmp/subgraphs.list
+          fi
+
+          echo "Composing supergraph..."
+          rover supergraph compose --config /shared/supergraph.yaml > /shared/supergraph.graphql
+          ls -la /shared/
+        env:
+        - name: POD_NAMESPACE
+          valueFrom: {fieldRef: {fieldPath: metadata.namespace}}
+        - name: APOLLO_ELV2_LICENSE
+          value: accept
+        - name: APOLLO_CONFIG_HOME
+          value: /tmp/.apollo
+        volumeMounts:
+        - {name: shared-data, mountPath: /shared}
+        - {name: tmp, mountPath: /tmp}
+        - {name: subgraphs, mountPath: /etc/subgraphs, readOnly: true}
+      containers:
+      - name: router
+        image: ghcr.io/apollographql/router:v2.8.1
+        args: ["--config", "/etc/apollo/router.yaml", "--supergraph", "/shared/supergraph.graphql"]
+        env:
+        - name: APOLLO_ROUTER_HOT_RELOAD
+          value: "true"
+        ports:
+        - {name: graphql, containerPort: 4000}
+        - {name: health, containerPort: 8088}
+        - {name: metrics, containerPort: 9090}
+        readinessProbe:
+          httpGet: {path: /health, port: 8088}
+          periodSeconds: 2
+        livenessProbe:
+          httpGet: {path: /health, port: 8088}
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        resources:
+          requests: {cpu: 100m, memory: 256Mi}
+          limits: {memory: 512Mi}
+        volumeMounts:
+        - {name: router-config, mountPath: /etc/apollo, readOnly: true}
+        - {name: shared-data, mountPath: /shared, readOnly: true}
+      volumes:
+      - name: router-config
+        configMap: {name: apollo-router-config}
+      - name: subgraphs
+        configMap: {name: apollo-router-subgraphs}
+      - name: shared-data
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}

@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 서브그래프 의존성 설치
+        run: for s in products reviews; do (cd subgraphs/$s && npm ci); done
+      - name: 두 overlay 렌더링. uplink 쪽엔 init container 흔적이 없어야 한다
+        run: |
+          kubectl kustomize k8s/overlays/init-compose > /tmp/before.yaml
+          kubectl kustomize k8s/overlays/uplink > /tmp/after.yaml
+          grep -q schema-composer /tmp/before.yaml
+          ! grep -q schema-composer /tmp/after.yaml
+          ! grep -q -- --supergraph /tmp/after.yaml
+      - name: 서브그래프 두 개를 띄우고 rover 로 실제 compose
+        run: |
+          (cd subgraphs/products && PORT=4001 node server.js &)
+          (cd subgraphs/reviews && PORT=4002 node server.js &)
+          sleep 4
+          docker run --rm --network host -e APOLLO_ELV2_LICENSE=accept \
+            -v "$PWD/scripts/ci-supergraph.yaml:/supergraph.yaml:ro" \
+            ghcr.io/apollographql/rover:0.41.0 supergraph compose --config /supergraph.yaml > /tmp/supergraph.graphql
+          grep -q 'type Product' /tmp/supergraph.graphql
+          grep -c '^type ' /tmp/supergraph.graphql

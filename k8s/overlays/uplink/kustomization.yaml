@@ -1,0 +1,17 @@
+# 전환 후: 라우터는 GraphOS Uplink에서 슈퍼그래프를 받고, publish는 CronJob이 맡는다.
+# 필요한 Secret: kubectl -n supergraph create secret generic apollo-router-studio \
+#   --from-literal=APOLLO_KEY=service:... --from-literal=APOLLO_GRAPH_REF=<graph>@<variant>
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: supergraph
+resources:
+  - namespace.yaml
+  - ../../base/subgraphs
+  - ../../base/router
+  - cronjob-publish.yaml
+patches:
+  - path: deployment-patch.yaml
+    target: {kind: Deployment, name: apollo-router}
+images:
+  - name: ghcr.io/apollographql/rover
+    newTag: 0.41.0
