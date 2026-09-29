@@ -17,6 +17,8 @@ k8s/
 scripts/
   minikube-up.sh           Minikube 프로필 생성 + 이미지 빌드
   query.sh                 두 서브그래프를 가로지르는 쿼리
+  schema-diff.sh           두 라우터 파드의 introspection 을 정규화해 비교
+  publish-now.sh           CronJob 템플릿으로 일회성 publish Job 실행
 ```
 
 ## 실행 (전환 전)
@@ -41,5 +43,7 @@ kubectl --context supergraph -n supergraph create job --from=cronjob/apollo-rout
 
 ## 글
 
-- [레지스트리 없이 init container로 슈퍼그래프 합치기](https://songtomtom.github.io/blog/apollo-router-init-container-compose)
-- [init container를 걷어내고 Uplink로](https://songtomtom.github.io/blog/apollo-router-uplink-publish-cronjob)
+1. [레지스트리 없이 init container로 슈퍼그래프 합치기](https://songtomtom.github.io/blog/apollo-router-init-container-compose)
+2. [서브그래프 목록 하나로, publish는 CronJob으로](https://songtomtom.github.io/blog/apollo-router-subgraph-list-publish-cronjob)
+3. [ConfigMap에 넣으려다 3.5MB에 막힌 이야기: Uplink로 전환](https://songtomtom.github.io/blog/apollo-router-uplink-configmap-limit)
+4. [바꾸기 전에 같은지 증명하기](https://songtomtom.github.io/blog/apollo-router-prove-same-schema-before-switch)
